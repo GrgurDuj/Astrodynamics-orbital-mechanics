@@ -1,4 +1,12 @@
 class Satellite:
+    def __init__(self, x, y, z, m, h, v):
+        self.x = x
+        self.y = y
+        self.z = z
+        self.m = m
+        self.h = h
+        self.v = v
+"""
     def __init__(self, a, e, i, omega, w, theta):
         self.a = a
         self.e = e
@@ -14,4 +22,4 @@ class Satellite:
         self.dx = dx
         self.dy = dy
         self.dz = dz
-        
+"""
