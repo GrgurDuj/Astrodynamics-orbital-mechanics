@@ -28,12 +28,12 @@ earthMRadius = 6378
 # in m
 h = 500000
 sat2Velocity = sqrt(earthMu / (h / 1000 + earthMRadius)) + 0.001
-sat2Height = earthMu/(sat2Velocity**2)
+sat2Height = earthMu / (sat2Velocity ** 2)
 
 sat1 = Satellite(0.300, 0.300, 0.300, 30, h, sqrt(earthMu / (h / 1000 + earthMRadius)))
 sat2 = Satellite(0.300, 0.300, 0.300, 30, (sat2Height - earthMRadius) * 1000, sat2Velocity)
 
-print(sat2Height-earthMRadius)
+print(sat2Height - earthMRadius)
 
 
 def solve_kepler(M, e):
@@ -79,7 +79,7 @@ def orbitalLinearVelocity(h):
 def dragAcceleration(r, a, sat):
     assert isinstance(sat, Satellite)
 
-    altitude = r - earthMRadius * 1000 # Altitude (m)
+    altitude = r - earthMRadius * 1000  # Altitude (m)
     a2m = sat.area / sat.mass  # Area to mass ratio
     velocity = orbitalLinearVelocity(altitude)  # Velocity magnitude (m/s)
     atmDensity = Atmos.airDensity(altitude)  # Density (kg/m^3)
@@ -134,9 +134,9 @@ def calculate(sat):
     # cart_state = keplerToCartesian(orb_a, orb_e, orb_i, orb_rightA, orb_w, orb_m, earthMu)
     lifetime_flag = False
     total_duration = 0  # seconds
-    tstep = 60
+    tstep = 1
     current_altitude = orb_altitude
-    while lifetime_flag == False and total_duration < 60*60*24*33980.29:
+    while lifetime_flag == False and total_duration < 60 * 60 * 24 * 7:
         # update time step
         total_duration = total_duration + tstep
 
@@ -168,7 +168,6 @@ def calculate(sat):
             lifetime_flag = True
             lifetime = total_duration
 
-
     if lifetime_flag:
         lifetime_days = total_duration / 86400
         lifetime_orbits = total_duration / orbitPeriod(sat.height)
@@ -182,10 +181,12 @@ def calculate(sat):
 
     lifetime_orbits = total_duration / orbitPeriod(sat.height)
     # print("Lifetime orbits: " + str(lifetime_orbits))
-    print(total_duration/60/60/24)
+    print(total_duration / 60 / 60 / 24)
     return altitudes, mean_anomalies
 
 
+major_ticks = np.arange(0, 60 * 60 * 24 * 8, 60 * 60 * 24)
+major_labels = np.arange(0, 8, 1)
 
 print(str(sat1.velocity) + "km/s")
 print(str(sat2.velocity) + "km/s")
@@ -193,9 +194,11 @@ altitudesSat2, meanAnomaliesSat2 = calculate(sat2)
 
 plt.plot(altitudesSat2)
 print(altitudesSat2[-1])
-print(sat2.height/1000 - altitudesSat2[-1])
-plt.ylim(ymin=497, ymax=498.195)
+print(sat2.height / 1000 - altitudesSat2[-1])
+plt.ylim(ymin=498.18, ymax=498.195)
 plt.title("Satellite 2 decay")
+plt.xticks(major_ticks, labels=major_labels)
+plt.xlabel("Days since orbit start")
 plt.savefig("Sat2decay.png")
 plt.show()
 
@@ -203,15 +206,72 @@ altitudesSat1, meanAnomaliesSat1 = calculate(sat1)
 print(altitudesSat1[-1])
 print(sat1.height / 1000 - altitudesSat1[-1])
 plt.plot(altitudesSat1)
-plt.ylim(ymin=498, ymax=500.1)
+plt.ylim(ymin=499.99, ymax=500.001)
 plt.title("Satellite 1 decay")
+plt.xticks(major_ticks, labels=major_labels)
+plt.xlabel("Days since orbit start")
 plt.savefig("Sat1decay.png")
+# plt.xticks(minor_ticks, labels=None, minor=True)
 plt.show()
 
 plt.plot(meanAnomaliesSat2)
 plt.title("Mean anomalies 2")
+plt.xticks(major_ticks, labels=major_labels)
+plt.xlabel("Days since orbit start")
+plt.savefig("meanAnom2total.png")
 plt.show()
 
 plt.plot(meanAnomaliesSat1)
 plt.title("Mean anomalies 1")
+plt.xticks(major_ticks, labels=major_labels)
+plt.xlabel("Days since orbit start")
+plt.savefig("meanAnom1total.png")
+plt.show()
+
+plt.plot(meanAnomaliesSat2)
+plt.xlim(xmin=0, xmax=2 * 60 * 60)
+plt.xticks(np.arange(0, 3 * 60 * 60, 60 * 60), np.arange(0, 3, 1))
+plt.xlabel("Hours since orbit start")
+plt.title("mean anomaly sat 2")
+plt.savefig("meanAnom22hours.png")
+plt.show()
+
+plt.plot(meanAnomaliesSat1)
+plt.xlim(xmin=0, xmax=2 * 60 * 60)
+plt.title("mean anomaly sat 1")
+plt.xticks(np.arange(0, 3 * 60 * 60, 60 * 60), np.arange(0, 3, 1))
+plt.xlabel("Hours since orbit start")
+plt.savefig("meanAnom12hours.png")
+plt.show()
+
+
+def calcVelocity(height):
+    return sqrt(earthMu / (height + earthMRadius))
+
+
+velocities1 = []
+velocities2 = []
+
+for alt in altitudesSat1:
+    velocities1.append(calcVelocity(alt))
+
+for alt in altitudesSat2:
+    velocities2.append(calcVelocity(alt))
+
+print("Sat 1: min" + str(sat1.velocity) + "sat 1: max " + str(velocities1[-1]) + "diff: " + str(sat1.velocity - velocities1[-1]))
+plt.plot(velocities1)
+plt.title("velocities 1")
+plt.xticks(major_ticks, labels=major_labels)
+plt.xlabel("Days since orbit start")
+plt.ylim(ymin=7.61268, ymax=7.61269)
+plt.savefig("velocities1.png")
+plt.show()
+
+print("Sat 2: min" + str(sat2.velocity) + "sat 2: max " + str(velocities2[-1]) + "diff: " + str(sat2.velocity - velocities2[-1]))
+plt.plot(velocities2)
+plt.title("velocities 2")
+plt.xticks(major_ticks, labels=major_labels)
+plt.xlabel("Days since orbit start")
+plt.ylim(ymin=7.61368, ymax=7.61369)
+plt.savefig("velocities2.png")
 plt.show()
