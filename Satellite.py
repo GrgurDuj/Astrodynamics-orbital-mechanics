@@ -7,11 +7,15 @@ class Satellite:
         # m
         self.z = z
         # kg
-        self.m = m
+        self.mass = m
         # m
-        self.h = h
+        self.height = h
         # km/s
-        self.v = v
+        self.velocity = v
+        # m2
+        self.area = x*z
+        # unitless
+        self.dragCoeff = 0.8
 """
     def __init__(self, a, e, i, omega, w, theta):
         self.a = a

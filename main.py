@@ -1,8 +1,11 @@
+import math
 from math import sqrt
-from math import exp
-import matplotlib.pyplot as plt
-from scipy.interpolate import interp1d
+import numpy as np
 
+import matplotlib.pyplot as plt
+
+import Atmos
+from Atmos import airDensity
 from Satellite import Satellite
 
 """
@@ -18,52 +21,197 @@ velocity in the flight direction w.r.t the other satellite which is exactly in t
 """
 # in km s
 earthMu = 398600.440
+# in kg
+earthMass = 5.97219 * 10 ** 24
 # in km
-earthMRadius = 6371
+earthMRadius = 6378
 # in m
 h = 500000
-heights = [0, 100, 150, 200, 250, 300, 350, 400, 450, 500]
-densities = [1.225,
-             5.25 * 10 ** -7,
-             1.73 * 10 ** -9,
-             2.41 * 10 ** -10,
-             5.97 * 10 ** -11,
-             1.87 * 10 ** -11,
-             6.66 * 10 ** -12,
-             2.62 * 10 ** -12,
-             1.09 * 10 ** -12,
-             4.76 * 10 ** -13]
-interpolated_densities = interp1d(heights, densities)
+sat2Velocity = sqrt(earthMu / (h / 1000 + earthMRadius)) + 0.001
+sat2Height = earthMu/(sat2Velocity**2)
 
 sat1 = Satellite(0.300, 0.300, 0.300, 30, h, sqrt(earthMu / (h / 1000 + earthMRadius)))
-sat2 = Satellite(0.300, 0.300, 0.300, 30, h, sqrt(earthMu / (h / 1000 + earthMRadius)) + 0.001)
-print(str(sat1.v) + "km/s")
-print(str(sat2.v) + "km/s")
+sat2 = Satellite(0.300, 0.300, 0.300, 30, (sat2Height - earthMRadius) * 1000, sat2Velocity)
 
-"""
-f10 min is 70
-f10 max is 300
-T = 900 + 2.5 (F10 – 70) + 1.5 Ap	(Kelvin)
-μ = 27 – 0.012 (h – 200)	180 < h (km) < 500
-H = T / μ	(km)
-ρ = 6x10-10 exp( - (h –175) / H )	( kg m-3)
-"""
-def airDensity(interpolated_densities, h):
-    h = h / 1000
-    return interpolated_densities(h)
-    """h = h / 1000
-    f10 = 300
-    temperature = 900 + 2.5 * (f10 - 70)
-    mu = 27 - 0.012 * (h - 200)
-    H = temperature / mu
-    density = (6 * 10 ** -10) ** (-(h - 175) / H)
-    # temperature = -131.21 + 0.00299 * h
-    # density = 2.488 * ((temperature + 273.1)/216.6) ** -11.388
-    return density
+print(sat2Height-earthMRadius)
+
+
+def solve_kepler(M, e):
+    '''Given some mean anomaly, M (rad), and eccentricity, e, this function
+    finds the eccentric anomaly E from the relation M = E - e*sin(E).
+
+    Parameters
+    ----------
+    M : float
+        Mean anomaly (radians) between +/- pi
+    e : float
+        Osculating eccentricity between (not inclusive) 0 and 1
+
+    Returns
+    -------
+    E : float
+        Eccentric anomaly (radians)
+
+    '''
+
+    E1 = M  # Initialise eccentric anomaly
+    residual = 1.0  # Initialise convergence residual
+    while residual >= 0.00001:
+        fn = E1 - (e * math.sin(E1)) - M
+        fd = 1 - (e * math.cos(E1))
+        E2 = E1 - (fn / fd)
+        residual = abs(E2 - E1)  # Compute residual
+        E1 = E2  # Update the eccentric anomaly
+
+    return E2
+
+
+def orbitPeriod(a):
+    return 2 * math.pi * math.sqrt(a ** 3 / earthMu)
+
+
+def orbitalLinearVelocity(h):
+    # r is height
+    # a is sma
+    return sqrt(earthMu / (h / 1000 + earthMRadius))
+
+
+def dragAcceleration(r, a, sat):
+    assert isinstance(sat, Satellite)
+
+    altitude = r - earthMRadius * 1000 # Altitude (m)
+    a2m = sat.area / sat.mass  # Area to mass ratio
+    velocity = orbitalLinearVelocity(altitude)  # Velocity magnitude (m/s)
+    atmDensity = Atmos.airDensity(altitude)  # Density (kg/m^3)
+    return 0.5 * atmDensity * sat.dragCoeff * a2m * (velocity ** 2)
+
+
+def altitudeDecayRate(r, a, sat):
+    dragAccel = dragAcceleration(r, a, sat)
+    return -1 * (dragAccel * orbitPeriod(a) / math.pi)
+
+
+def keplerToCartesian(a, e, i, RAAN, omega, nu, mu):
+    p = a * (1 - e ** 2)  # semi-latus rectum, [km]
+    r = p / (1 + e * np.cos(nu))  # orbit radius, [km]
+    # h = np.sqrt(mu*a*(1-e^2)) # angular momentum
+    x = r * (np.cos(RAAN) * np.cos(omega + nu) - np.sin(RAAN) * np.sin(omega + nu) * np.cos(i))  # x-position, [km]
+    y = r * (np.sin(RAAN) * np.cos(omega + nu) + np.cos(RAAN) * np.sin(omega + nu) * np.cos(i))  # y-position, [km]
+    z = r * (np.sin(i) * np.sin(omega + nu))  # z-position, [km]
+    cart = [x, y, z]  # cartesian state vector
+    return cart
+
+
+def calculate(sat):
+    orb_altitude = sat.height
+    orb_eccentricity = 0
+    orb_mean_anomaly = 0
+    orb_semimajor = sat.height + earthMRadius * 1000
+    orb_inclination = 90
+    orb_true_anomaly = 0
+    orb_w = 0
+    orb_omega = 0
+    altitudes = []
+    mean_anomalies = []
+
     """
+    have to keep track of
+    shape size 
+    eccentricity e          ✓ doesn't change with decay
+    semi-major axis a       ✓
+
+    orbital plane
+    inclination i           ✓ doesn't change with decay
+    longitude of ascending node omega   ✓ doesn't change with decay
+
+    argument of periapsis w - ascending node to periapsis   ✓ doesn't change with decay
+    mean anomaly v - position at time ✓ 
+    """
+    decay_alt = 0.0  # The decay amount in meters
+    # total_DV = 0.0 # Total Delta-V used (m/s)
+    # thrustcount = 0 # Counting the number of thrusts needed
+    meanAnomaly = np.deg2rad(orb_mean_anomaly)  # Init the mean anomaly in radians
+    # cart_state = keplerToCartesian(orb_a, orb_e, orb_i, orb_rightA, orb_w, orb_m, earthMu)
+    lifetime_flag = False
+    total_duration = 0  # seconds
+    tstep = 60
+    current_altitude = orb_altitude
+    while lifetime_flag == False and total_duration < 60*60*24*33980.29:
+        # update time step
+        total_duration = total_duration + tstep
+
+        # mean motion
+        keplerPeriod = orbitPeriod(current_altitude + earthMRadius)
+        meanMotion = (2 * np.pi) / keplerPeriod
+
+        # mean anomaly at time step
+        meanAnomaly = (meanAnomaly + np.pi + (meanMotion * tstep))
+        meanAnomaly = meanAnomaly % (2 * math.pi) - math.pi
+        mean_anomalies.append(meanAnomaly)
+
+        # eccentric anomaly
+        eccnAnomaly = solve_kepler(meanAnomaly, orb_eccentricity)
+        # print(eccnAnomaly)
+
+        # Now, we can substitute orb_E to find the satellite radial distance.
+        rd = orb_semimajor * (1 - orb_eccentricity * np.cos(eccnAnomaly))
+
+        # compute decay rate and apply to semimajor axis
+        decay_rate = altitudeDecayRate(rd, orb_semimajor, sat)
+        decay_alt = decay_rate * tstep
+        orb_semimajor += decay_alt
+
+        current_altitude = rd / 1000 - earthMRadius
+        altitudes.append(current_altitude)
+
+        if current_altitude < 100.0:
+            lifetime_flag = True
+            lifetime = total_duration
 
 
-print(airDensity(interpolated_densities, h))
-"""
-Calculates air density at specified eight in meters
-"""
+    if lifetime_flag:
+        lifetime_days = total_duration / 86400
+        lifetime_orbits = total_duration / orbitPeriod(sat.height)
+        lifetime_str = "Lifetime decay is"
+        lifetime_str += 'after ' + str(lifetime_orbits) + ' orbits.'
+        lifetime_str += 'The lifetime is ' + str(lifetime_days) + ' days. \n'
+        print(lifetime_str)
+
+    if not lifetime_flag:
+        print("Satellite did not decay in 180 days")
+
+    lifetime_orbits = total_duration / orbitPeriod(sat.height)
+    # print("Lifetime orbits: " + str(lifetime_orbits))
+    print(total_duration/60/60/24)
+    return altitudes, mean_anomalies
+
+
+
+print(str(sat1.velocity) + "km/s")
+print(str(sat2.velocity) + "km/s")
+altitudesSat2, meanAnomaliesSat2 = calculate(sat2)
+
+plt.plot(altitudesSat2)
+print(altitudesSat2[-1])
+print(sat2.height/1000 - altitudesSat2[-1])
+plt.ylim(ymin=497, ymax=498.195)
+plt.title("Satellite 2 decay")
+plt.savefig("Sat2decay.png")
+plt.show()
+
+altitudesSat1, meanAnomaliesSat1 = calculate(sat1)
+print(altitudesSat1[-1])
+print(sat1.height / 1000 - altitudesSat1[-1])
+plt.plot(altitudesSat1)
+plt.ylim(ymin=498, ymax=500.1)
+plt.title("Satellite 1 decay")
+plt.savefig("Sat1decay.png")
+plt.show()
+
+plt.plot(meanAnomaliesSat2)
+plt.title("Mean anomalies 2")
+plt.show()
+
+plt.plot(meanAnomaliesSat1)
+plt.title("Mean anomalies 1")
+plt.show()
