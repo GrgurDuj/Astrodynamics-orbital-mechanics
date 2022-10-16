@@ -69,6 +69,18 @@ def solve_kepler(M, e):
 def orbitPeriod(a):
     return 2 * math.pi * math.sqrt(a ** 3 / earthMu)
 
+def HohmannTransferDV(rd,maintenance_tolerance,maintenance_fro):
+    R1 = rd
+    if maintenance_fro == True:
+        R2 = rd + (2*maintenance_tolerance*1000)
+    else:
+        R2 = rd + (maintenance_tolerance*1000)
+    DV1 = math.sqrt(earthMu/R1) * (math.sqrt((2*R2)/(R1+R2)) - 1)
+    DV2 = math.sqrt(earthMu/R2) * (1 - math.sqrt((2*R1)/(R1+R2)))
+    totalDV = DV1+DV2
+    Time_Elapsed = math.pi * math.sqrt(((R1+R2)**3)/(8*earthMu))
+    # Returns (Delta_V (m/s), Time_Elapsed (seconds))
+    return totalDV, Time_Elapsed
 
 def orbitalLinearVelocity(h):
     # r is height
@@ -89,6 +101,15 @@ def dragAcceleration(r, a, sat):
 def altitudeDecayRate(r, a, sat):
     dragAccel = dragAcceleration(r, a, sat)
     return -1 * (dragAccel * orbitPeriod(a) / math.pi)
+
+
+def calculateDistance(anomaly1, anomaly2, altitude1, altitude2):
+    anomalyDifference = anomaly2 - anomaly1
+    tendonLength = 2 * (altitude2 + earthMRadius) * np.sin(anomalyDifference / 2)
+    altitudeDifference = altitude1 - altitude2
+    distance = sqrt(altitudeDifference ** 2 + tendonLength ** 2)  # √[(x₂ - x₁)² + (y₂ - y₁)²]
+
+    return distance
 
 
 def keplerToCartesian(a, e, i, RAAN, omega, nu, mu):
@@ -151,7 +172,6 @@ def calculate(sat):
 
         # eccentric anomaly
         eccnAnomaly = solve_kepler(meanAnomaly, orb_eccentricity)
-        # print(eccnAnomaly)
 
         # Now, we can substitute orb_E to find the satellite radial distance.
         rd = orb_semimajor * (1 - orb_eccentricity * np.cos(eccnAnomaly))
@@ -185,13 +205,13 @@ def calculate(sat):
     return altitudes, mean_anomalies
 
 
-major_ticks = np.arange(0, 60 * 60 * 24 * 8, 60 * 60 * 24)
-major_labels = np.arange(0, 8, 1)
+major_ticks = np.arange(0, 60 * 24 * 366, 60 * 24 * 30)
+major_labels = np.arange(0, 13, 1)
 
 print(str(sat1.velocity) + "km/s")
 print(str(sat2.velocity) + "km/s")
 altitudesSat2, meanAnomaliesSat2 = calculate(sat2)
-
+"""
 plt.plot(altitudesSat2)
 print(altitudesSat2[-1])
 print(sat2.height / 1000 - altitudesSat2[-1])
@@ -201,8 +221,9 @@ plt.xticks(major_ticks, labels=major_labels)
 plt.xlabel("Days since orbit start")
 plt.savefig("Sat2decay.png")
 plt.show()
-
+"""
 altitudesSat1, meanAnomaliesSat1 = calculate(sat1)
+"""
 print(altitudesSat1[-1])
 print(sat1.height / 1000 - altitudesSat1[-1])
 plt.plot(altitudesSat1)
@@ -243,22 +264,28 @@ plt.xticks(np.arange(0, 3 * 60 * 60, 60 * 60), np.arange(0, 3, 1))
 plt.xlabel("Hours since orbit start")
 plt.savefig("meanAnom12hours.png")
 plt.show()
-
-
+"""
 def calcVelocity(height):
     return sqrt(earthMu / (height + earthMRadius))
 
 
+orbitPeriods1 = []
+orbitPeriods2 = []
 velocities1 = []
 velocities2 = []
 
 for alt in altitudesSat1:
     velocities1.append(calcVelocity(alt))
+    orbitPeriods1.append(orbitPeriod(alt))
 
 for alt in altitudesSat2:
     velocities2.append(calcVelocity(alt))
+    orbitPeriods2.append(orbitPeriod(alt))
 
-print("Sat 1: min" + str(sat1.velocity) + "sat 1: max " + str(velocities1[-1]) + "diff: " + str(sat1.velocity - velocities1[-1]))
+
+"""
+print("Sat 1: min" + str(sat1.velocity) + "sat 1: max " + str(velocities1[-1]) + "diff: " + str(
+    sat1.velocity - velocities1[-1]))
 plt.plot(velocities1)
 plt.title("velocities 1")
 plt.xticks(major_ticks, labels=major_labels)
@@ -267,7 +294,8 @@ plt.ylim(ymin=7.61268, ymax=7.61269)
 plt.savefig("velocities1.png")
 plt.show()
 
-print("Sat 2: min" + str(sat2.velocity) + "sat 2: max " + str(velocities2[-1]) + "diff: " + str(sat2.velocity - velocities2[-1]))
+print("Sat 2: min" + str(sat2.velocity) + "sat 2: max " + str(velocities2[-1]) + "diff: " + str(
+    sat2.velocity - velocities2[-1]))
 plt.plot(velocities2)
 plt.title("velocities 2")
 plt.xticks(major_ticks, labels=major_labels)
@@ -275,3 +303,54 @@ plt.xlabel("Days since orbit start")
 plt.ylim(ymin=7.61368, ymax=7.61369)
 plt.savefig("velocities2.png")
 plt.show()
+"""
+
+differences = []
+for (v1,v2) in zip(velocities1, velocities2):
+    differences.append(v2-v1)
+plt.plot(differences)
+plt.xticks(major_ticks, labels=major_labels)
+plt.xlabel("Days since orbit start")
+plt.title("Velocity differences")
+plt.show()
+
+plt.plot(orbitPeriods1)
+plt.xticks(major_ticks, labels=major_labels)
+plt.xlabel("Days since orbit start")
+plt.title("Satellite 1 orbit periods")
+plt.show()
+
+plt.plot(orbitPeriods2)
+plt.xticks(major_ticks, labels=major_labels)
+plt.xlabel("Days since orbit start")
+plt.title("Satellite 2 orbit periods")
+plt.show()
+
+odifferences = []
+for (o1, o2) in zip(orbitPeriods1, orbitPeriods2):
+    odifferences.append(o2 - o1)
+plt.plot(odifferences)
+plt.title("Orbit period difference")
+plt.xlabel("Days since orbit start")
+plt.title("Satellite orbit period differences")
+plt.xticks(major_ticks, labels=major_labels)
+plt.show()
+
+"""
+distances = []
+count = 0
+for (an1, an2, alti1, alti2) in zip(meanAnomaliesSat1, meanAnomaliesSat2, altitudesSat1, altitudesSat2):
+    count = + 1
+    a1, a2, alt1, alt2 = (an1, an2, alti1, alti2)
+    distances.append(calculateDistance(a1, a2, alt1, alt2))
+np.savetxt("distances.csv", distances)
+plt.plot(distances)
+plt.title("Distance")
+plt.xticks(major_ticks, labels=major_labels)
+plt.xlabel("Months   since orbit start")
+plt.savefig("distances.png")
+plt.show()
+"""
+
+print("Sat 1 init: " + str(sat1.velocity) + " Sat 1 last: " + str(velocities1[-1]) + " Sat 1 change: " + str(sat1.velocity - velocities1[-1]))
+print("Sat 2 init: " + str(sat2.velocity) + " Sat 2 last: " + str(velocities2[-1]) + " Sat 2 change: " + str(sat2.velocity - velocities2[-1]))
