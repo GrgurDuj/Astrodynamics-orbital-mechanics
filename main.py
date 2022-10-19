@@ -4,7 +4,6 @@ import numpy as np
 
 import matplotlib.pyplot as plt
 
-import Atmos
 from Atmos import airDensity
 from Satellite import Satellite
 
@@ -69,18 +68,20 @@ def solve_kepler(M, e):
 def orbitPeriod(a):
     return 2 * math.pi * math.sqrt(a ** 3 / earthMu)
 
-def HohmannTransferDV(rd,maintenance_tolerance,maintenance_fro):
+
+def HohmannTransferDV(rd, maintenance_tolerance, maintenance_fro):
     R1 = rd
     if maintenance_fro == True:
-        R2 = rd + (2*maintenance_tolerance*1000)
+        R2 = rd + (2 * maintenance_tolerance * 1000)
     else:
-        R2 = rd + (maintenance_tolerance*1000)
-    DV1 = math.sqrt(earthMu/R1) * (math.sqrt((2*R2)/(R1+R2)) - 1)
-    DV2 = math.sqrt(earthMu/R2) * (1 - math.sqrt((2*R1)/(R1+R2)))
-    totalDV = DV1+DV2
-    Time_Elapsed = math.pi * math.sqrt(((R1+R2)**3)/(8*earthMu))
+        R2 = rd + (maintenance_tolerance * 1000)
+    DV1 = math.sqrt(earthMu / R1) * (math.sqrt((2 * R2) / (R1 + R2)) - 1)
+    DV2 = math.sqrt(earthMu / R2) * (1 - math.sqrt((2 * R1) / (R1 + R2)))
+    totalDV = DV1 + DV2
+    Time_Elapsed = math.pi * math.sqrt(((R1 + R2) ** 3) / (8 * earthMu))
     # Returns (Delta_V (m/s), Time_Elapsed (seconds))
     return totalDV, Time_Elapsed
+
 
 def orbitalLinearVelocity(h):
     # r is height
@@ -94,7 +95,7 @@ def dragAcceleration(r, a, sat):
     altitude = r - earthMRadius * 1000  # Altitude (m)
     a2m = sat.area / sat.mass  # Area to mass ratio
     velocity = orbitalLinearVelocity(altitude)  # Velocity magnitude (m/s)
-    atmDensity = Atmos.airDensity(altitude)  # Density (kg/m^3)
+    atmDensity = airDensity(altitude)  # Density (kg/m^3)
     return 0.5 * atmDensity * sat.dragCoeff * a2m * (velocity ** 2)
 
 
@@ -265,6 +266,8 @@ plt.xlabel("Hours since orbit start")
 plt.savefig("meanAnom12hours.png")
 plt.show()
 """
+
+
 def calcVelocity(height):
     return sqrt(earthMu / (height + earthMRadius))
 
@@ -281,7 +284,6 @@ for alt in altitudesSat1:
 for alt in altitudesSat2:
     velocities2.append(calcVelocity(alt))
     orbitPeriods2.append(orbitPeriod(alt))
-
 
 """
 print("Sat 1: min" + str(sat1.velocity) + "sat 1: max " + str(velocities1[-1]) + "diff: " + str(
@@ -304,10 +306,10 @@ plt.ylim(ymin=7.61368, ymax=7.61369)
 plt.savefig("velocities2.png")
 plt.show()
 """
-
+"""
 differences = []
-for (v1,v2) in zip(velocities1, velocities2):
-    differences.append(v2-v1)
+for (v1, v2) in zip(velocities1, velocities2):
+    differences.append(v2 - v1)
 plt.plot(differences)
 plt.xticks(major_ticks, labels=major_labels)
 plt.xlabel("Days since orbit start")
@@ -335,7 +337,6 @@ plt.xlabel("Days since orbit start")
 plt.title("Satellite orbit period differences")
 plt.xticks(major_ticks, labels=major_labels)
 plt.show()
-
 """
 distances = []
 count = 0
@@ -343,6 +344,7 @@ for (an1, an2, alti1, alti2) in zip(meanAnomaliesSat1, meanAnomaliesSat2, altitu
     count = + 1
     a1, a2, alt1, alt2 = (an1, an2, alti1, alti2)
     distances.append(calculateDistance(a1, a2, alt1, alt2))
+"""
 np.savetxt("distances.csv", distances)
 plt.plot(distances)
 plt.title("Distance")
@@ -352,5 +354,60 @@ plt.savefig("distances.png")
 plt.show()
 """
 
-print("Sat 1 init: " + str(sat1.velocity) + " Sat 1 last: " + str(velocities1[-1]) + " Sat 1 change: " + str(sat1.velocity - velocities1[-1]))
-print("Sat 2 init: " + str(sat2.velocity) + " Sat 2 last: " + str(velocities2[-1]) + " Sat 2 change: " + str(sat2.velocity - velocities2[-1]))
+
+def calculateTransferTime(a):
+    return math.pi * sqrt(a ** 3 / earthMu)
+
+
+def calculateTotalDeltav(v1, v2, h1, h2):
+    r1 = earthMRadius + h1
+    r2 = earthMRadius + h2
+    a = 0.5 * (r1 + r2)
+    e = (r2 - r1) / (r2 + r1)
+    delta1 = sqrt(earthMu * (2 / r1 - 1 / a)) - v1
+    print("delta1 is: " + str(delta1))
+    delta2 = v2 - sqrt(earthMu * (2 / r2 - 1 / a))
+    print("delta2 is: " + str(delta2))
+    totalDeltaV = abs(delta1) + abs(delta2)
+    return totalDeltaV, a
+
+
+initialVelocity = sat2.velocity
+targetVelocity = sat1.velocity
+initialHeight = sat2.height / 1000
+targetHeight = sat1.height / 1000
+
+totalDeltaV, a = calculateTotalDeltav(initialVelocity, targetVelocity, initialHeight, targetHeight)
+print("Total delta: " + str(totalDeltaV))
+print("Transfer orbit a: " + str(a))
+print("Time taken: " + str(calculateTransferTime(a)))
+
+count = 0
+targetHeights = []
+transferTimes = []
+totalDeltaVs = []
+targetVelocities = []
+transferTime = 0
+
+
+totalDeltaV, a = calculateTotalDeltav(initialVelocity, targetVelocity, initialHeight, targetHeight)
+transferTime = calculateTransferTime(a)
+targetHeights.append(targetHeight)
+transferTimes.append(transferTime)
+totalDeltaVs.append(totalDeltaV)
+targetVelocities.append(targetVelocity)
+
+print(targetHeights)
+print(targetVelocities)
+print(transferTimes)
+print(calculateDistance(meanAnomaliesSat1[int(transferTime)], meanAnomaliesSat2[int(transferTime)],
+                        altitudesSat1[int(transferTime)], altitudesSat2[int(transferTime)]))
+
+# how much the angle changes
+# orbit time
+# mu
+# dT = 2*pi*sqrt((a3/mu)) = (3T/2a)delta a
+# delta pos = (3pi delta a T total)/(aT)
+# delta a = (delta pos a T)/(3pi T total)
+# a = trrt(mu(T/2pi)**2)
+# t total
